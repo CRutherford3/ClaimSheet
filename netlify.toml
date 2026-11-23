@@ -1,0 +1,9 @@
+[build]
+  publish = "public"
+  command = "npm install"
+
+[functions]
+  node_bundler = "esbuild"
+  # exceljs is CommonJS with Node built-in requires; ship it as a normal
+  # node_module instead of bundling it into the ES module.
+  external_node_modules = ["exceljs"]
