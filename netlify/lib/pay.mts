@@ -4,7 +4,9 @@ import { claims, loadPaid, PRICES, RANK, type PaidRecord, type Tier } from "./st
 export function stripe() {
   const key = Netlify.env.get("STRIPE_SECRET_KEY")
   if (!key) throw new Error("STRIPE_SECRET_KEY is not set")
-  return new Stripe(key)
+  // Stripe Managed Payments needs API version 2025-03-31.basil or newer; the
+  // installed SDK defaults to an older one, so pin it here.
+  return new Stripe(key, { apiVersion: "2025-03-31.basil" as any })
 }
 
 // Marks a claim paid (or upgraded) from a completed Checkout Session. Used by
