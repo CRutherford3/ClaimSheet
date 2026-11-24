@@ -16,14 +16,18 @@ A phone-first contents list builder for home insurance claims. Lists save to the
 
 Prices are set in `netlify/lib/store.mts` (`PRICES`, in cents): $9 storm-ready, $49 claim, $79 for 100+ items.
 
-## Deploy (one time setup, about 15 minutes)
+## Deploy
+
+The site deploys automatically from GitHub: every push to `main` goes live on claimsheet.io in a minute or two. The Terminal steps below are only a backup.
+
+## Deploy from Terminal (backup)
 
 Drag-and-drop deploys don't run functions, so use the Netlify CLI from Terminal on your Mac:
 
 1. Install the CLI: `npm install -g netlify-cli`
 2. In this folder: `netlify login`, then `netlify init` (choose "Create & configure a new project").
 3. `netlify deploy --build --prod`
-4. Add a domain in Netlify (for testing: a subdomain like `claims.dialcheck.io`).
+4. The live domain is **claimsheet.io** (set as the primary domain in Netlify).
 
 ## Stripe setup
 
@@ -31,7 +35,7 @@ Drag-and-drop deploys don't run functions, so use the Netlify CLI from Terminal 
 2. Netlify > Project configuration > Environment variables, add (scope: Functions):
    - `STRIPE_SECRET_KEY` = your `sk_test_...` key
    - `STRIPE_WEBHOOK_SECRET` = from step 3
-3. Stripe > Developers > Webhooks > Add endpoint: `https://YOUR-DOMAIN/api/stripe-webhook`, events `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+3. Stripe > Developers > Webhooks > Add endpoint: `https://claimsheet.io/api/stripe-webhook`, events `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
 4. Redeploy (`netlify deploy --build --prod`) so the functions pick up the keys.
 5. Test with card `4242 4242 4242 4242`, any future date, any CVC.
 6. When it all works, swap both values for your live keys and redeploy.
