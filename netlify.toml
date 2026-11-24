@@ -7,3 +7,12 @@
   # exceljs is CommonJS with Node built-in requires; ship it as a normal
   # node_module instead of bundling it into the ES module.
   external_node_modules = ["exceljs"]
+
+# One address for search engines: send www to claimsheet.io.
+# claimsheet.netlify.app is not redirected so any webhook or link still using it keeps working.
+# The canonical tags on each page tell Google and Bing that claimsheet.io is the real address.
+[[redirects]]
+  from = "https://www.claimsheet.io/*"
+  to = "https://claimsheet.io/:splat"
+  status = 301
+  force = true

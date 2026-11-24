@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /*?
+Disallow: /.netlify/
+Disallow: /api/
+
+Sitemap: https://claimsheet.io/sitemap.xml
