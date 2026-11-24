@@ -2,6 +2,10 @@ import type { Config } from "@netlify/functions"
 import { dueFor, fail, json, loadClaim, loadPaid, PRICES, RANK, tierFor, validId, countedItems, type Tier } from "../lib/store.mts"
 import { stripe } from "../lib/pay.mts"
 
+// Stripe Managed Payments requires a tax code on every product. ClaimSheet is
+// browser-based software for personal use: "SaaS - personal use".
+const TAX_CODE = "txcd_10103000"
+
 const NAMES: Record<Tier, string> = {
   ready: "ClaimSheet Storm Ready (home inventory, 50 AI scans)",
   loss: "ClaimSheet claim packet (200 AI scans)",
@@ -27,14 +31,20 @@ export default async (req: Request) => {
   const amount = dueFor(target, paid)
   const name = paid ? `Upgrade to ${NAMES[target]} (credit for ${fmt(PRICES[paid.tier])} already paid)` : NAMES[target]
   const origin = new URL(req.url).origin
-  const session = await stripe().checkout.sessions.create({
+  let session
+  try {
+    session = await stripe().checkout.sessions.create({
     mode: "payment",
-    line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: amount, product_data: { name } } }],
+    line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: amount, product_data: { name, tax_code: TAX_CODE } } }],
     metadata: { claim_id: c, tier: target, from: paid?.tier ?? "" },
     success_url: `${origin}/app/?c=${c}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/app/?c=${c}`,
     allow_promotion_codes: true,
-  })
+    })
+  } catch (e) {
+    console.error("checkout failed", e)
+    return fail("Checkout couldn't start. Please try again in a minute.", 502)
+  }
   return json({ url: session.url })
 }
 
