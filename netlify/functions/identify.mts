@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions"
 import Anthropic from "@anthropic-ai/sdk"
-import { fail, json, loadClaim, photos, validId, validPhotoId } from "../lib/store.mts"
+import { addScan, fail, fullStatus, json, loadClaim, photos, validId, validPhotoId } from "../lib/store.mts"
 
 // POST /api/identify  { c: CLAIM_ID, photos: [PHOTO_ID, ...] }  (or photo: PHOTO_ID)
 // Up to 4 photos of the same item are read together, so a close-up of the
@@ -38,7 +38,12 @@ export default async (req: Request) => {
   const c = body?.c
   const ids: string[] = (Array.isArray(body?.photos) ? body.photos : [body?.photo]).filter(validPhotoId).slice(0, 4)
   if (!validId(c) || !ids.length) return fail("Bad request")
-  if (!(await loadClaim(c))) return fail("Claim not found", 404)
+  const claim = await loadClaim(c)
+  if (!claim) return fail("Claim not found", 404)
+  // Scan allowance: 10 free, then whatever the plan includes. Checked here on
+  // the server so it can't be gotten around by refreshing or a new browser.
+  const st = await fullStatus(claim)
+  if (st.scans.used >= st.scans.limit) return Response.json({ error: "out_of_scans", scans: st.scans }, { status: 402 })
   if (!Netlify.env.get("ANTHROPIC_BASE_URL") && !Netlify.env.get("ANTHROPIC_API_KEY")) return fail("Photo scan isn't turned on yet", 503)
 
   const images = []
@@ -79,7 +84,9 @@ export default async (req: Request) => {
     if (!use || use.type !== "tool_use") return fail("Couldn't read that photo", 502)
     const r = use.input as Record<string, any>
     const n = (v: unknown) => Math.max(0, Math.round(Number(v) || 0))
+    await addScan(c)
     return json({
+      scans: { ...st.scans, used: st.scans.used + 1 },
       item: String(r.item || "").slice(0, 120), brand: String(r.brand || "").slice(0, 80), brand_is_guess: !!r.brand_is_guess, model: String(r.model || "").slice(0, 80),
       category: String(r.category || "Other"), quantity: Math.max(1, n(r.quantity)),
       price_low: n(r.price_low), price_high: n(r.price_high), price_typical: n(r.price_typical),

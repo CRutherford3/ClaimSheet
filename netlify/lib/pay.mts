@@ -1,5 +1,5 @@
 import Stripe from "stripe"
-import { claims, loadPaid, PRICES, type PaidRecord } from "./store.mts"
+import { claims, loadPaid, PRICES, RANK, type PaidRecord, type Tier } from "./store.mts"
 
 export function stripe() {
   const key = Netlify.env.get("STRIPE_SECRET_KEY")
@@ -7,15 +7,19 @@ export function stripe() {
   return new Stripe(key)
 }
 
-// Marks a claim paid from a completed Checkout Session. Used by both the
-// success-page check and the webhook, so whichever arrives first wins and the
-// other is a no-op.
+// Marks a claim paid (or upgraded) from a completed Checkout Session. Used by
+// both the success-page check and the webhook. The record only ever moves up a
+// tier, so whichever arrives first wins and the other is a no-op.
 export async function recordPayment(session: Stripe.Checkout.Session) {
   const cid = session.metadata?.claim_id
-  const tier = session.metadata?.tier as keyof typeof PRICES | undefined
-  if (!cid || !tier || session.payment_status !== "paid") return false
-  if (await loadPaid(cid)) return true
-  const rec: PaidRecord = { tier, amount: session.amount_total ?? PRICES[tier], session: session.id, at: Date.now() }
+  const tier = session.metadata?.tier as Tier | undefined
+  if (!cid || !tier || !(tier in PRICES) || session.payment_status !== "paid") return false
+  const prev = await loadPaid(cid)
+  if (prev && RANK[prev.tier] >= RANK[tier]) return true
+  const rec: PaidRecord = {
+    tier, amount: PRICES[tier], session: session.id,
+    sessions: [...(prev?.sessions ?? (prev ? [prev.session] : [])), session.id], at: Date.now(),
+  }
   await claims().setJSON(`paid/${cid}`, rec)
   return true
 }

@@ -131,7 +131,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const $=id=>document.getElementById(id);
 const app=$('app'), sheet=$('sheet');
 
-let S=null, CID=null, PAID=false, PRICE=4900, view={screen:'home',room:null};
+let S=null, CID=null, PAID=false, PRICE=4900, ST=null, view={screen:'home',room:null};
 const photoUrl=p=>`/api/photo/${CID}/${p}`;
 const itemTotal=i=>(+i.rc||0)*(+i.qty||1);
 const counts=i=>S.mode==='ready'||i.damaged;
@@ -140,10 +140,12 @@ const counted=()=>S.rooms.flatMap(r=>r.items.filter(counts).map(i=>({...i,room:r
 const myLink=()=>`${location.origin}/app/?c=${CID}`;
 
 /* ---------- server ---------- */
+function applyStatus(d){if(d&&'unlocked' in d){ST=d;PAID=d.unlocked;PRICE=d.price;}}
+const TIER_NAME={ready:'Storm Ready',loss:'Claim packet',large:'Large claim'};
 async function api(path,opts={}){
   const r=await fetch(path,opts); let d={};
   try{d=await r.json()}catch(e){}
-  if(!r.ok) throw new Error(d.error||'Something went wrong. Check your connection and try again.');
+  if(!r.ok){const e=new Error(d.error||'Something went wrong. Check your connection and try again.');e.status=r.status;e.data=d;throw e;}
   return d;
 }
 let saveTimer=null, saving=false, dirty=false;
@@ -151,7 +153,7 @@ function setSync(t){$('sync').textContent=t}
 function save(){dirty=true;setSync('Saving...');clearTimeout(saveTimer);saveTimer=setTimeout(flush,700)}
 async function flush(){
   if(saving||!dirty)return; saving=true; dirty=false;
-  try{const d=await api(`/api/claim?c=${CID}`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(S)});PRICE=d.price||PRICE;setSync(dirty?'Saving...':'Saved')}
+  try{const d=await api(`/api/claim?c=${CID}`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(S)});applyStatus(d);setSync(dirty?'Saving...':'Saved')}
   catch(e){dirty=true;setSync('Not saved, retrying');setTimeout(flush,4000)}
   finally{saving=false;if(dirty)flush()}
 }
@@ -160,7 +162,7 @@ window.addEventListener('beforeunload',e=>{if(dirty||saving){e.preventDefault();
 async function start(mode){
   try{
     const d=await api('/api/claim',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode,info:{},rooms:[]})});
-    CID=d.id;S=d.claim;PAID=false;PRICE=d.price;
+    CID=d.id;S=d.claim;applyStatus(d);
     history.replaceState(null,'',`/app/?c=${CID}`);
     try{localStorage.setItem(LAST,CID)}catch(e){}
     $('dock').hidden=false;render();setSync('Saved');
@@ -176,7 +178,7 @@ async function load(){
     const sid=q.get('session_id');
     if(sid){try{await api(`/api/verify?c=${CID}&session_id=${encodeURIComponent(sid)}`)}catch(e){}history.replaceState(null,'',`/app/?c=${CID}`)}
     const d=await api(`/api/claim?c=${CID}`);
-    S=d.claim;PAID=d.paid;PRICE=d.price;
+    S=d.claim;applyStatus(d);
     try{localStorage.setItem(LAST,CID)}catch(e){}
     $('dock').hidden=false;setSync('Saved');render();
     if(sid) packet();
@@ -211,7 +213,7 @@ function renderWelcome(err){
     <ol class="steps">
       <li><b class="n">1</b><div><b>Walk each room.</b> Add what was damaged with a photo, brand, age and what it costs to replace today.</div></li>
       <li><b class="n">2</b><div><b>Your list saves as you go.</b> Use your private link to finish on any phone or computer.</div></li>
-      <li><b class="n">3</b><div><b>Get your packet.</b> A PDF with every line item and a photo log, plus an Excel copy. One payment: $49 for a claim, $79 for 100+ items, $9 for a storm-ready inventory.</div></li>
+      <li><b class="n">3</b><div><b>Get your packet.</b> A PDF with every line item and a photo log, plus an Excel copy. One payment: $49 for a claim, $79 for 100+ items, $9 for a storm-ready inventory. Your first 10 photo scans are free. Already bought Storm Ready? Upgrading to a claim only costs the difference.</div></li>
     </ol>
   </div>
   <p class="hint" style="text-align:center">ClaimSheet helps you document and organize your belongings. It does not negotiate with your insurance company or give legal advice.</p>`;
@@ -395,6 +397,7 @@ function itemForm(roomId,itemId){
     aiBox.innerHTML=`<div class="ai"><span class="spin"></span>Reading your ${ids.length>1?ids.length+' photos':'photo'}...</div>`;
     try{
       const d=await api('/api/identify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({c:CID,photos:ids})});
+      if(d.scans&&ST)ST.scans=d.scans;
       const set=(id,v)=>{const el=sheet.querySelector(id);if(v&&(force||!el.value.trim()||(id==='#i-qty'&&el.value==='1')))el.value=v;};
       const bm=[d.brand,d.model].filter(Boolean).join(' ');
       const bEl=sheet.querySelector('#i-brand'),had=bEl.value.trim();
@@ -409,8 +412,11 @@ function itemForm(roomId,itemId){
         <div>New ones typically run <b>${fmt(d.price_low)} to ${fmt(d.price_high)}</b>. We filled in ${fmt(d.price_typical)}. Check it and change anything that's off.</div>
         ${brandTip}
         ${d.note?`<div class="meta" style="margin-top:4px">${esc(d.note)}</div>`:''}
+        ${scansLeftLine()}
         <div class="row"><a class="btn ghost sm" href="https://www.google.com/search?tbm=shop&q=${q}" target="_blank" rel="noopener">Check price online</a><button class="link" data-rescan>Scan again</button></div></div>`;
-    }catch(e){aiBox.innerHTML=`<div class="ai">${esc(e.message)}</div>`;}
+    }catch(e){
+      if(e.status===402&&e.data&&e.data.scans){if(ST)ST.scans=e.data.scans;aiBox.innerHTML=outOfScans(e.data.scans);return;}
+      aiBox.innerHTML=`<div class="ai">${esc(e.message)}</div>`;}
   }
   scanBtn();
   sheet.querySelector('#saveItem').onclick=()=>{
@@ -425,6 +431,29 @@ function itemForm(roomId,itemId){
   if(del)del.onclick=()=>{if(!del.dataset.sure){del.dataset.sure=1;del.textContent='Tap again to delete';return;}r.items=r.items.filter(x=>x.id!==i.id);save();closeModal();render();toast('Item deleted');};
 }
 
+/* ---------- scans + upgrades ---------- */
+function scansLeftLine(){
+  if(!ST)return'';const s=ST.scans,left=Math.max(0,s.limit-s.used);
+  return `<div class="meta" style="margin-top:4px">${left} of ${s.limit} ${ST.owned?'':'free '}photo scans left</div>`;
+}
+function outOfScans(s){
+  const t=s.upgradeTier;
+  if(!t)return `<div class="ai"><b>You've used all ${s.limit} photo scans on this claim.</b><div>You can still add items by typing them in.</div></div>`;
+  const owned=ST&&ST.owned;
+  return `<div class="ai"><b>You've used your ${s.limit} ${owned?'':'free '}photo scans.</b>
+    <div>${owned?`Upgrade to ${TIER_NAME[t]} for <b>${fmt(s.upgradePrice/100)}</b>. You only pay the difference from what you already paid, and you get ${s.upgradeLimit} scans total.`:`Get ${TIER_NAME[t]} for <b>${fmt(s.upgradePrice/100)}</b> to keep scanning, up to ${s.upgradeLimit} items, plus your ${t==='ready'?'home inventory':'claim'} packet.`}</div>
+    <div class="row"><button class="btn acc sm" data-upgrade="${t}">${owned?'Upgrade':'Unlock'} for ${fmt(s.upgradePrice/100)}</button></div>
+    <div class="meta" style="margin-top:6px">Typing items in by hand is always free.</div></div>`;
+}
+async function checkout(tier,btn){
+  await flush();
+  if(btn){btn.disabled=true;btn.textContent='Opening checkout...';}
+  try{const d=await api('/api/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({c:CID,tier})});
+    if(d.alreadyPaid){location.reload();return;} location.href=d.url;}
+  catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent='Try again';}}
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-upgrade]');if(b)checkout(b.dataset.upgrade,b);});
+
 /* ---------- link + packet ---------- */
 function shareSheet(first){
   sheet.innerHTML=`
@@ -437,6 +466,10 @@ function shareSheet(first){
   $('modal').classList.add('on');
 }
 
+function upsell(){
+  if(!ST||!ST.scans.upgradeTier)return'';const s=ST.scans;
+  return `<p class="hint">${Math.max(0,s.limit-s.used)} of ${s.limit} photo scans left. Need more? <button class="link" data-upgrade="${s.upgradeTier}">Upgrade to ${TIER_NAME[s.upgradeTier]} for ${fmt(s.upgradePrice/100)}</button> (${s.upgradeLimit} scans, you only pay the difference).</p>`;
+}
 async function packet(){
   await flush();
   const items=counted(),total=items.reduce((a,i)=>a+itemTotal(i),0);
@@ -445,9 +478,9 @@ async function packet(){
   sheet.innerHTML=`
   <div class="row" style="justify-content:space-between"><h2>${PAID?'Your packet is ready':'Your claim packet'}</h2><button class="back" id="closeM">Close</button></div>
   <p class="sub">${items.length} line items, ${fmt(total)} replacement cost, ${items.filter(i=>i.photos.length).length} with photos.</p>
-  ${PAID?files:items.length?`
+  ${PAID?files+upsell():items.length?`
     <div class="pay"><div class="p">${fmt(PRICE/100)}</div>
-      <div style="font-size:14px;color:var(--muted)">One time. You get an adjuster-ready PDF with every line item by room and a photo log, plus an Excel copy. Re-download any time after you add items.</div></div>
+      <div style="font-size:14px;color:var(--muted)">${ST&&ST.owned?`Upgrade from ${TIER_NAME[ST.owned]} to ${TIER_NAME[ST.buyTier]}. You already paid ${fmt(ST.credit/100)}, so you only pay the difference. `:'One time. '}You get an adjuster-ready PDF with every line item by room and a photo log, plus an Excel copy, and ${ST?({ready:50,loss:200,large:500})[ST.buyTier]:200} AI photo scans. Re-download any time after you add items.</div></div>
     <button class="btn acc" id="buy" style="width:100%">Pay ${fmt(PRICE/100)} and get my packet</button>
     <p class="hint" style="text-align:center">Secure checkout by Stripe.</p>`:'<div class="empty">Add at least one item first.</div>'}`;
   sheet.querySelector('#closeM').onclick=closeModal;
@@ -455,7 +488,7 @@ async function packet(){
   if(buy)buy.onclick=async()=>{
     buy.disabled=true;buy.textContent='Opening checkout...';
     try{const d=await api('/api/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({c:CID})});
-      if(d.alreadyPaid){PAID=true;packet();return;} location.href=d.url;}
+      if(d.alreadyPaid){location.reload();return;} location.href=d.url;}
     catch(e){toast(e.message);buy.disabled=false;buy.textContent='Try again';}
   };
   $('modal').classList.add('on');

@@ -1,5 +1,5 @@
 import type { Config } from "@netlify/functions"
-import { fail, loadClaim, loadPaid, photos, validId } from "../lib/store.mts"
+import { fail, fullStatus, loadClaim, photos, validId } from "../lib/store.mts"
 import { buildPdf, buildXlsx } from "../lib/export.mts"
 
 // GET /api/export?c=CLAIM&fmt=pdf|xlsx  builds the claim packet. Only works
@@ -10,7 +10,8 @@ export default async (req: Request) => {
   if (!validId(c)) return fail("Missing claim")
   const claim = await loadClaim(c)
   if (!claim) return fail("Claim not found", 404)
-  if (!(await loadPaid(c))) return fail("This packet has not been unlocked yet", 402)
+  const st = await fullStatus(claim)
+  if (!st.unlocked) return fail(st.owned ? "This claim needs an upgrade before the packet can be downloaded" : "This packet has not been unlocked yet", 402)
 
   const base = `ClaimSheet-${(claim.info.claim || claim.info.name || "packet").replace(/[^A-Za-z0-9-]+/g, "-").slice(0, 40)}`
   if (fmt === "xlsx") {

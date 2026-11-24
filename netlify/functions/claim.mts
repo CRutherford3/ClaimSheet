@@ -1,5 +1,5 @@
 import type { Config } from "@netlify/functions"
-import { claims, fail, json, loadClaim, loadPaid, newId, sanitize, tierFor, validId, PRICES } from "../lib/store.mts"
+import { claims, fail, fullStatus, json, loadClaim, newId, sanitize, status, validId } from "../lib/store.mts"
 
 // POST /api/claim          create a new claim, returns { id }
 // GET  /api/claim?c=ID     load a claim plus its paid status
@@ -11,7 +11,7 @@ export default async (req: Request) => {
     const newClaimId = newId()
     const claim = sanitize(newClaimId, await req.json().catch(() => ({})), null)
     await claims().setJSON(`claim/${newClaimId}`, claim)
-    return json({ id: newClaimId, claim, paid: false, price: PRICES[tierFor(claim)] })
+    return json({ id: newClaimId, claim, ...status(claim, null, 0) })
   }
 
   if (!validId(id)) return fail("Missing or invalid claim link", 400)
@@ -19,8 +19,7 @@ export default async (req: Request) => {
   if (!existing) return fail("Claim not found", 404)
 
   if (req.method === "GET") {
-    const paid = await loadPaid(id)
-    return json({ claim: existing, paid: !!paid, price: PRICES[tierFor(existing)] })
+    return json({ claim: existing, ...(await fullStatus(existing)) })
   }
 
   if (req.method === "PUT") {
@@ -30,7 +29,7 @@ export default async (req: Request) => {
     try { body = JSON.parse(text) } catch { return fail("Bad JSON") }
     const claim = sanitize(id, body, existing)
     await claims().setJSON(`claim/${id}`, claim)
-    return json({ ok: true, updated: claim.updated, price: PRICES[tierFor(claim)] })
+    return json({ ok: true, updated: claim.updated, ...(await fullStatus(claim)) })
   }
 
   return fail("Method not allowed", 405)

@@ -8,6 +8,12 @@ export const photos = () => getStore({ name: "photos" })
 
 export const PRICES = { ready: 900, loss: 4900, large: 7900 } // cents
 export const LARGE_CLAIM_ITEMS = 100
+// AI photo scans each plan includes. Typing items in by hand is always free.
+export const FREE_SCANS = 10
+export const SCANS = { ready: 50, loss: 200, large: 500 }
+export const RANK = { ready: 1, loss: 2, large: 3 }
+export type Tier = keyof typeof PRICES
+const NEXT: Record<Tier, Tier | null> = { ready: "loss", loss: "large", large: null }
 
 export type Item = {
   id: string; desc: string; brand: string; qty: number; age: number; cond: string
@@ -19,7 +25,9 @@ export type Claim = {
   info: { name: string; address: string; carrier: string; claim: string; dol: string; cause: string }
   rooms: Room[]
 }
-export type PaidRecord = { tier: keyof typeof PRICES; amount: number; session: string; at: number }
+// amount is the credit toward upgrades: the full list price of the tier owned,
+// so moving up always costs exactly the difference.
+export type PaidRecord = { tier: Tier; amount: number; session: string; sessions?: string[]; at: number }
 
 export function newId(bytes = 24) {
   const b = new Uint8Array(bytes)
@@ -47,9 +55,45 @@ export const countedItems = (c: Claim) =>
 
 export const lineTotal = (i: Item) => (Number(i.rc) || 0) * (Number(i.qty) || 1)
 
-export function tierFor(c: Claim): keyof typeof PRICES {
+export function tierFor(c: Claim): Tier {
   if (c.mode === "ready") return "ready"
   return countedItems(c).length > LARGE_CLAIM_ITEMS ? "large" : "loss"
+}
+
+export async function loadScans(id: string) {
+  const r = (await claims().get(`scans/${id}`, { type: "json" })) as { n: number } | null
+  return r?.n ?? 0
+}
+export async function addScan(id: string) {
+  await claims().setJSON(`scans/${id}`, { n: (await loadScans(id)) + 1 })
+}
+
+// Stripe won't charge less than 50 cents.
+export const dueFor = (target: Tier, paid: PaidRecord | null) => Math.max(50, PRICES[target] - (paid ? PRICES[paid.tier] : 0))
+
+// Everything the app needs to know about what's paid for and what's next.
+export function status(c: Claim, paid: PaidRecord | null, scansUsed: number) {
+  const need = tierFor(c)
+  const owned = paid?.tier ?? null
+  const unlocked = !!owned && RANK[owned] >= RANK[need]
+  // What "Get claim packet" would buy: the tier this claim needs.
+  const buyTier: Tier | null = unlocked ? null : need
+  // What buying more AI scans would buy: the next plan up.
+  const scanTier: Tier | null = owned ? NEXT[owned] : need
+  return {
+    paid: unlocked, unlocked, owned, need,
+    price: buyTier ? dueFor(buyTier, paid) : 0, buyTier,
+    credit: owned ? PRICES[owned] : 0,
+    scans: {
+      used: scansUsed, limit: owned ? SCANS[owned] : FREE_SCANS,
+      upgradeTier: scanTier, upgradeLimit: scanTier ? SCANS[scanTier] : 0,
+      upgradePrice: scanTier ? dueFor(scanTier, paid) : 0,
+    },
+  }
+}
+export async function fullStatus(c: Claim) {
+  const [paid, used] = await Promise.all([loadPaid(c.id), loadScans(c.id)])
+  return status(c, paid, used)
 }
 
 // Clean up whatever the browser sends so stored claims always have the same shape.
