@@ -487,7 +487,7 @@ async function packet(){
     <div class="pay"><div class="p">${fmt(PRICE/100)}</div>
       <div style="font-size:14px;color:var(--muted)">${ST&&ST.owned?`Upgrade from ${TIER_NAME[ST.owned]} to ${TIER_NAME[ST.buyTier]}. You already paid ${fmt(ST.credit/100)}, so you only pay the difference. `:'One time. '}You get an adjuster-ready PDF with every line item by room and a photo log, plus an Excel copy, and ${ST?({ready:50,loss:200,large:500})[ST.buyTier]:200} AI photo scans. Re-download any time after you add items.</div></div>
     <button class="btn acc" id="buy" style="width:100%">Pay ${fmt(PRICE/100)} and get my packet</button>
-    <p class="hint" style="text-align:center">Secure checkout by Stripe.</p>`:'<div class="empty">Add at least one item first.</div>'}`;
+    <p class="hint" style="text-align:center">Secure checkout by Stripe. By paying you agree to the <a href="/terms/" target="_blank">Terms</a> and <a href="/refunds/" target="_blank">Refund Policy</a>. Questions? <a href="/contact/" target="_blank">Contact</a></p>`:'<div class="empty">Add at least one item first.</div>'}`;
   sheet.querySelector('#closeM').onclick=closeModal;
   const buy=sheet.querySelector('#buy');
   if(buy)buy.onclick=async()=>{

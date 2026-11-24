@@ -3,4 +3,8 @@
   <url><loc>https://claimsheet.io/</loc><lastmod>2026-11-24</lastmod><priority>1.0</priority></url>
   <url><loc>https://claimsheet.io/claim-tips/</loc><lastmod>2026-11-24</lastmod><priority>0.8</priority></url>
   <url><loc>https://claimsheet.io/app/</loc><lastmod>2026-11-24</lastmod><priority>0.6</priority></url>
+  <url><loc>https://claimsheet.io/contact/</loc><lastmod>2026-11-24</lastmod><priority>0.3</priority></url>
+  <url><loc>https://claimsheet.io/privacy/</loc><lastmod>2026-11-24</lastmod><priority>0.3</priority></url>
+  <url><loc>https://claimsheet.io/terms/</loc><lastmod>2026-11-24</lastmod><priority>0.3</priority></url>
+  <url><loc>https://claimsheet.io/refunds/</loc><lastmod>2026-11-24</lastmod><priority>0.3</priority></url>
 </urlset>

@@ -132,6 +132,7 @@ footer .in{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 @media(max-width:900px){nav{display:none}.hero .in{grid-template-columns:1fr}.g3,.steps,.price{grid-template-columns:1fr}}
 @media(max-width:600px){.gap{grid-template-columns:1fr}header .btn{padding:0 14px}}
 .tipsp{max-width:820px}.tipsp h1{font-size:clamp(32px,5vw,48px);margin:0 0 14px}.tipsp .sub{color:var(--muted);font-size:19px;margin:0 0 10px}.tipsp h3{font-size:24px;margin:34px 0 10px}.tipsp ul{padding-left:22px;display:grid;gap:10px;margin:0}
+footer .flinks{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}footer .flinks a{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -181,7 +182,7 @@ footer .in{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 </div></section>
 
 <footer><div class="in">
-  <div><b style="color:var(--ink)">ClaimSheet</b><br>Contents lists for home insurance claims.<br><a href="/claim-tips/" style="color:var(--blue)">Claim tips from an adjuster</a></div>
+  <div><b style="color:var(--ink)">ClaimSheet</b><br>Contents lists for home insurance claims.<br><a href="/claim-tips/" style="color:var(--blue)">Claim tips from an adjuster</a><div class="flinks"><a href="/contact/">Contact</a><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="/refunds/">Refunds</a></div></div>
   <div>We don't sell or share your information.<br>ClaimSheet is a documentation tool, not an appraisal service or public adjuster.<br>&copy; <span id="yr"></span> ClaimSheet</div>
 </div></footer>
 <script>{document.getElementById('yr').textContent=new Date().getFullYear()}</script>
